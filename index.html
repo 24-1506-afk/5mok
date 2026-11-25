@@ -1,0 +1,2753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>오목 (Gomoku) - 온라인 &amp; 오프라인 에디션</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS (WebRTC P2P 실시간 온라인 대전) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Google Fonts: Noto Sans KR & Noto Serif KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-hanji: #f5efe4;
+      --bg-card: #fffcf7;
+      --border-wood: #d8c7ae;
+      --text-ink: #2a211b;
+      --text-muted: #6e5d4f;
+      --accent-wood: #8c5a2b;
+      --accent-wood-dark: #6b421c;
+      --accent-gold: #c4923a;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-hanji);
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(210, 175, 120, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(168, 124, 72, 0.15) 0%, transparent 50%);
+      color: var(--text-ink);
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    .font-serif-kr {
+      font-family: 'Noto Serif KR', serif;
+    }
+
+    /* 바둑판 외곽 나무 프레임 */
+    .board-frame {
+      background: linear-gradient(145deg, #9a6938 0%, #6d4520 50%, #4e2f14 100%);
+      box-shadow:
+        0 20px 40px -12px rgba(42, 26, 12, 0.45),
+        0 8px 18px -6px rgba(42, 26, 12, 0.3),
+        inset 0 2px 3px rgba(255, 232, 198, 0.35),
+        inset 0 -3px 6px rgba(28, 15, 5, 0.55);
+      border-radius: 16px;
+      padding: 10px;
+      position: relative;
+    }
+
+    @media (min-width: 640px) {
+      .board-frame {
+        padding: 14px;
+        border-radius: 20px;
+      }
+    }
+
+    .board-inner {
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: inset 0 0 12px rgba(45, 25, 8, 0.45);
+      position: relative;
+      background-color: #d9aa63;
+    }
+
+    canvas#gomokuCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    canvas#gomokuCanvas.not-my-turn {
+      cursor: default;
+    }
+
+    /* 패널 카드 */
+    .wood-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-wood);
+      box-shadow:
+        0 6px 20px -6px rgba(68, 45, 22, 0.12),
+        0 2px 6px -2px rgba(68, 45, 22, 0.06);
+      border-radius: 18px;
+    }
+
+    /* 로비 모드 선택 카드 */
+    .mode-card {
+      background: linear-gradient(180deg, #fffdf9 0%, #f8f1e5 100%);
+      border: 2px solid #dccab0;
+      border-radius: 22px;
+      box-shadow: 0 10px 26px -10px rgba(68, 45, 22, 0.16);
+      transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      cursor: pointer;
+    }
+    .mode-card:hover {
+      border-color: #9b6633;
+      transform: translateY(-4px);
+      box-shadow: 0 18px 34px -12px rgba(107, 66, 28, 0.26);
+    }
+    .mode-card:active {
+      transform: translateY(-1px);
+    }
+
+    /* 버튼 스타일 */
+    .btn-primary {
+      background: linear-gradient(180deg, #9b6633 0%, #7a4c21 100%);
+      color: #fffaf2;
+      border: 1px solid #653d18;
+      box-shadow: 0 3px 8px rgba(86, 51, 19, 0.28), inset 0 1px 0 rgba(255, 236, 206, 0.3);
+      transition: all 0.16s ease;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(180deg, #ab723b 0%, #865426 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 5px 12px rgba(86, 51, 19, 0.32), inset 0 1px 0 rgba(255, 236, 206, 0.35);
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(180deg, #fffdf9 0%, #f3eadc 100%);
+      color: #3c2d21;
+      border: 1px solid #d5c2a6;
+      box-shadow: 0 2px 4px rgba(66, 44, 22, 0.08);
+      transition: all 0.16s ease;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: linear-gradient(180deg, #ffffff 0%, #ece0cd 100%);
+      border-color: #bfa684;
+      transform: translateY(-1px);
+    }
+    .btn-secondary:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-danger {
+      background: linear-gradient(180deg, #fff7f6 0%, #fde9e7 100%);
+      color: #9e2a22;
+      border: 1px solid #e6b4af;
+      box-shadow: 0 2px 4px rgba(158, 42, 34, 0.08);
+      transition: all 0.16s ease;
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: linear-gradient(180deg, #fff0ee 0%, #fbd8d4 100%);
+      border-color: #d68c84;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary:disabled,
+    .btn-primary:disabled,
+    .btn-danger:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* 플레이어 턴 카드 */
+    .player-card {
+      background: #f8f2e7;
+      border: 2px solid #e2d3bc;
+      border-radius: 16px;
+      transition: all 0.22s ease;
+    }
+    .player-card.active {
+      background: #fffdf9;
+      border-color: #9b6633;
+      box-shadow:
+        0 6px 18px -4px rgba(130, 82, 34, 0.24),
+        0 0 0 3px rgba(196, 146, 58, 0.2);
+      transform: translateY(-1px);
+    }
+    .player-name-input {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 1px 4px;
+      margin-left: -4px;
+      width: 100%;
+      font-weight: 700;
+      color: #2a211b;
+      transition: all 0.15s ease;
+    }
+    .player-name-input:not(:disabled):hover {
+      background: rgba(140, 90, 43, 0.08);
+      border-color: rgba(140, 90, 43, 0.25);
+    }
+    .player-name-input:focus {
+      outline: none;
+      background: #ffffff;
+      border-color: #9b6633;
+      box-shadow: 0 0 0 2px rgba(155, 102, 51, 0.18);
+    }
+    .player-name-input:disabled {
+      cursor: default;
+      opacity: 1;
+    }
+
+    /* 토글 스위치 */
+    .toggle-track {
+      width: 44px;
+      height: 24px;
+      border-radius: 9999px;
+      background-color: #d6c7b2;
+      transition: background-color 0.2s ease;
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .toggle-track.on {
+      background-color: #8c5a2b;
+    }
+    .toggle-track:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .toggle-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .toggle-track.on .toggle-thumb {
+      transform: translateX(20px);
+    }
+
+    /* 입체 바둑돌 아이콘 */
+    .stone-icon {
+      display: inline-block;
+      border-radius: 9999px;
+      flex-shrink: 0;
+    }
+    .stone-black {
+      background: radial-gradient(circle at 32% 30%, #5e5e5e 0%, #242424 45%, #0a0a0a 100%);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+    }
+    .stone-white {
+      background: radial-gradient(circle at 32% 30%, #ffffff 0%, #f0ece3 55%, #cfc7ba 100%);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+      border: 1px solid #d2c9bc;
+    }
+
+    /* 연결 상태 점 */
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .conn-dot.online {
+      background-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
+    }
+    .conn-dot.offline {
+      background-color: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+    }
+
+    /* 입력 필드 */
+    .wood-input {
+      background: #fffdf9;
+      border: 1.5px solid #d5c2a6;
+      border-radius: 12px;
+      color: #2a211b;
+      transition: all 0.16s ease;
+    }
+    .wood-input:focus {
+      outline: none;
+      border-color: #8c5a2b;
+      box-shadow: 0 0 0 3px rgba(140, 90, 43, 0.15);
+    }
+
+    /* 애니메이션 */
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, 12px) scale(0.96); }
+      to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .toast-box {
+      animation: toastIn 0.22s ease-out forwards;
+    }
+
+    @keyframes bubblePop {
+      0% { opacity: 0; transform: translate(-50%, -14px) scale(0.9); }
+      100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .reaction-pop {
+      animation: bubblePop 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.85); opacity: 0.7; }
+      70% { transform: scale(1.4); opacity: 0; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+    .waiting-ring {
+      animation: pulseRing 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-amber-200 selection:text-amber-950">
+
+  <!-- 공통 상단 헤더 -->
+  <header class="w-full max-w-6xl mx-auto px-4 pt-4 pb-2 sm:pt-5 sm:pb-3 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#8c5a2b] to-[#5a3514] flex items-center justify-center shadow-md border border-[#b5814b]/40 flex-shrink-0">
+        <div class="relative w-6 h-6">
+          <span class="stone-icon stone-black w-4 h-4 absolute top-0 left-0"></span>
+          <span class="stone-icon stone-white w-4 h-4 absolute bottom-0 right-0"></span>
+        </div>
+      </div>
+      <div class="min-w-0">
+        <h1 class="font-serif-kr text-lg sm:text-2xl font-bold tracking-tight text-[#2a211b] leading-tight truncate">
+          오목 <span id="headerModeBadge" class="text-xs sm:text-sm font-semibold text-[#8c5a2b] font-sans ml-1 align-middle">Gomoku</span>
+        </h1>
+        <p class="text-xs text-[#756252] hidden sm:block">15×15 전통 오목 · 온라인 P2P &amp; 오프라인 2인 대전</p>
+      </div>
+    </div>
+
+    <!-- 우측 도구 버튼 -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <button id="btnGoLobby" type="button"
+        class="hidden btn-secondary px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-[#7a4c21]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span>로비로</span>
+      </button>
+
+      <button id="btnSound" type="button"
+        class="btn-secondary px-3 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1.5"
+        aria-label="효과음 켜기/끄기">
+        <svg id="iconSoundOn" class="w-4 h-4 text-[#7a4c21]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+        <svg id="iconSoundOff" class="w-4 h-4 text-[#9a8775] hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+        </svg>
+        <span id="soundLabel" class="hidden sm:inline">소리 켜짐</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       VIEW 1: 초기 시작 화면 (모드 선택 로비)
+       ========================================================================= -->
+  <section id="viewLobby" class="w-full max-w-4xl mx-auto px-4 pt-6 pb-14 sm:pt-12">
+    <div class="text-center mb-8 sm:mb-10">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#efe4d2] border border-[#dac6a8] text-xs font-semibold text-[#7a4c21] mb-4">
+        <span class="stone-icon stone-black w-3 h-3"></span>
+        <span>15×15 전통 오목 · 렌주룰 지원</span>
+        <span class="stone-icon stone-white w-3 h-3"></span>
+      </div>
+      <h2 class="font-serif-kr text-3xl sm:text-4xl font-bold text-[#2a211b] tracking-tight mb-3">
+        어떻게 대국을 시작할까요?
+      </h2>
+      <p class="text-sm sm:text-base text-[#6e5d4f] max-w-lg mx-auto">
+        같은 기기에서 친구와 마주 앉아 두거나, 방 코드와 초대 링크로 멀리 있는 친구와 실시간 온라인 오목을 즐겨보세요.
+      </p>
+    </div>
+
+    <!-- 2개 모드 선택 카드 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+      <!-- 오프라인 대전 카드 -->
+      <button id="btnSelectOffline" type="button" class="mode-card p-6 sm:p-7 text-left flex flex-col justify-between group">
+        <div>
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#e7d4b8] to-[#cfa974] flex items-center justify-center shadow-inner border border-[#c59b62]/40 mb-5">
+            <svg class="w-7 h-7 text-[#4d2f14]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <div class="flex items-center gap-2 mb-2">
+            <h3 class="font-serif-kr text-xl sm:text-2xl font-bold text-[#2a211b]">오프라인 대전</h3>
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-[#efe4d2] text-[#7a4c21]">로컬 2인</span>
+          </div>
+          <p class="text-sm text-[#6e5d4f] leading-relaxed mb-5">
+            한 화면에서 친구와 흑돌·백돌을 번갈아가며 두는 전통 오목입니다. 인터넷 없이도 바로 즐길 수 있습니다.
+          </p>
+        </div>
+        <div class="flex items-center justify-between pt-4 border-t border-[#e8dac5] text-sm font-bold text-[#8c5a2b] group-hover:text-[#6b421c]">
+          <span>오프라인으로 시작하기</span>
+          <svg class="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </div>
+      </button>
+
+      <!-- 온라인 대전 카드 -->
+      <button id="btnSelectOnline" type="button" class="mode-card p-6 sm:p-7 text-left flex flex-col justify-between group">
+        <div>
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#9b6633] to-[#653d18] flex items-center justify-center shadow-md border border-[#b5814b]/40 mb-5">
+            <svg class="w-7 h-7 text-[#fff8ec]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+          </div>
+          <div class="flex items-center gap-2 mb-2">
+            <h3 class="font-serif-kr text-xl sm:text-2xl font-bold text-[#2a211b]">온라인 대전</h3>
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">실시간 P2P</span>
+          </div>
+          <p class="text-sm text-[#6e5d4f] leading-relaxed mb-5">
+            대전 방을 만들고 6자리 방 코드나 초대 링크를 친구에게 보내 실시간으로 대국합니다. 별도 회원가입이 필요 없습니다.
+          </p>
+        </div>
+        <div class="flex items-center justify-between pt-4 border-t border-[#e8dac5] text-sm font-bold text-[#8c5a2b] group-hover:text-[#6b421c]">
+          <span>온라인 방 만들기 / 입장</span>
+          <svg class="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       VIEW 2: 온라인 대전 로비 (닉네임, 방 만들기, 대기실, 방 입장)
+       ========================================================================= -->
+  <section id="viewOnline" class="hidden w-full max-w-xl mx-auto px-4 pt-4 pb-12 sm:pt-8">
+    <div class="wood-card p-5 sm:p-7">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="font-serif-kr text-xl sm:text-2xl font-bold text-[#2a211b]">온라인 대전</h2>
+          <p class="text-xs sm:text-sm text-[#756252] mt-0.5">WebRTC P2P 실시간 1:1 대국</p>
+        </div>
+        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+          <span class="conn-dot online"></span> P2P 준비됨
+        </span>
+      </div>
+
+      <!-- 닉네임 입력 -->
+      <div class="mb-5">
+        <label for="onlineNickname" class="block text-xs font-bold text-[#4a3b2e] mb-1.5">내 닉네임</label>
+        <input id="onlineNickname" type="text" maxlength="10" placeholder="닉네임을 입력하세요 (예: 오목고수)"
+          class="wood-input w-full px-3.5 py-2.5 text-sm font-semibold" />
+      </div>
+
+      <!-- 탭 전환 (방 만들기 / 방 입장하기) -->
+      <div id="onlineTabs" class="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#efe6d8] border border-[#dfcfb7] mb-5">
+        <button id="tabCreateRoom" type="button"
+          class="py-2 rounded-lg text-sm font-bold bg-[#fffdf9] text-[#2a211b] shadow-sm transition">
+          방 만들기 (호스트)
+        </button>
+        <button id="tabJoinRoom" type="button"
+          class="py-2 rounded-lg text-sm font-semibold text-[#756252] hover:text-[#2a211b] transition">
+          방 입장하기 (게스트)
+        </button>
+      </div>
+
+      <!-- 패널 A: 방 만들기 -->
+      <div id="panelCreateRoom" class="space-y-4">
+        <!-- 방 생성 전 설정 -->
+        <div id="createSetupBox" class="space-y-4">
+          <div class="rounded-xl bg-[#f7f0e4] border border-[#e6d8c3] p-4 flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm font-bold text-[#2a211b] flex items-center gap-1.5">
+                렌주룰 (흑돌 금수 적용)
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">3-3·4-4·장목</span>
+              </div>
+              <p class="text-xs text-[#756252] mt-0.5">방장이 설정한 규칙이 상대방에게 자동 동기화됩니다.</p>
+            </div>
+            <button id="toggleHostRenju" type="button" role="switch" aria-checked="true" class="toggle-track on">
+              <span class="toggle-thumb"></span>
+            </button>
+          </div>
+
+          <div class="text-xs text-[#756252] bg-[#fbf7f0] border border-[#eadcc8] rounded-xl px-3.5 py-2.5 leading-relaxed">
+            첫 판은 방장(호스트)이 <strong class="text-[#2a211b]">흑돌(선공)</strong>, 참가자가 <strong class="text-[#2a211b]">백돌(후공)</strong>으로 시작하며, 재대국 시 흑·백이 자동으로 교대됩니다.
+          </div>
+
+          <button id="btnCreateRoom" type="button"
+            class="btn-primary w-full py-3.5 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            대전 방 만들기
+          </button>
+        </div>
+
+        <!-- 방 생성 후 대기실 -->
+        <div id="createWaitingBox" class="hidden space-y-4">
+          <div class="rounded-2xl bg-[#f7f0e4] border-2 border-[#d9c4a3] p-5 text-center">
+            <div class="text-xs font-bold text-[#7a6450] mb-1">생성된 방 코드</div>
+            <div id="displayRoomCode" class="font-mono text-3xl sm:text-4xl font-extrabold tracking-[0.22em] text-[#2a211b] select-all mb-3">
+              ------
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button id="btnCopyCode" type="button" class="btn-secondary py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4 text-[#7a4c21]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                코드 복사
+              </button>
+              <button id="btnCopyLink" type="button" class="btn-primary py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                초대 링크 복사
+              </button>
+            </div>
+            <div class="mt-3 text-[11px] text-[#7a6450] bg-[#fffdf9] border border-[#e5d6be] rounded-lg px-2.5 py-1.5 truncate select-all" id="displayInviteLink">
+              https://...
+            </div>
+          </div>
+
+          <!-- 상대방 입장 대기 애니메이션 -->
+          <div class="flex items-center justify-center gap-3 py-2 text-sm font-semibold text-[#5e4630]">
+            <div class="relative flex items-center justify-center w-5 h-5">
+              <span class="waiting-ring absolute w-5 h-5 rounded-full bg-[#9b6633]"></span>
+              <span class="relative w-2.5 h-2.5 rounded-full bg-[#8c5a2b]"></span>
+            </div>
+            <span id="waitingStatusText">상대방의 입장을 기다리는 중...</span>
+          </div>
+
+          <button id="btnCancelRoom" type="button" class="btn-danger w-full py-2.5 rounded-xl text-sm font-bold">
+            방 만들기 취소
+          </button>
+        </div>
+      </div>
+
+      <!-- 패널 B: 방 입장하기 -->
+      <div id="panelJoinRoom" class="hidden space-y-4">
+        <div>
+          <label for="inputJoinCode" class="block text-xs font-bold text-[#4a3b2e] mb-1.5">6자리 방 코드</label>
+          <input id="inputJoinCode" type="text" maxlength="6" placeholder="예: AB3K9Z"
+            class="wood-input w-full px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.25em] uppercase" />
+        </div>
+
+        <div id="joinErrorBox" class="hidden rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs font-semibold text-red-700">
+        </div>
+
+        <button id="btnJoinRoom" type="button"
+          class="btn-primary w-full py-3.5 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+          </svg>
+          <span id="btnJoinRoomText">방 입장하기</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       VIEW 3: 오목 대국 화면 (오프라인 & 온라인 공통)
+       ========================================================================= -->
+  <main id="viewGame" class="hidden w-full max-w-6xl mx-auto px-3 sm:px-4 pb-8 pt-1 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
+
+    <!-- 좌측: 바둑판 영역 -->
+    <section class="lg:col-span-7 xl:col-span-8 flex flex-col items-center w-full">
+
+      <!-- 2인 플레이어 차례 카드 -->
+      <div class="w-full max-w-[640px] mb-2.5 grid grid-cols-2 gap-2.5 sm:gap-3">
+        <!-- 흑돌 플레이어 카드 -->
+        <div id="cardBlack" class="player-card active px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3">
+          <span class="stone-icon stone-black w-7 h-7 sm:w-8 sm:h-8"></span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-1 mb-0.5">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span id="connDotBlack" class="hidden conn-dot online"></span>
+                <span class="text-[11px] font-semibold text-[#7a6450] truncate">선공 · 흑</span>
+                <span id="meBadgeBlack" class="hidden px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#efe4d2] text-[#7a4c21] border border-[#d6be9c]">나</span>
+              </div>
+              <span id="badgeBlack" class="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-[#8c5a2b] text-[#fffaf2] shadow-sm flex-shrink-0">
+                현재 차례
+              </span>
+            </div>
+            <input id="nameBlack" type="text" value="흑돌" maxlength="10"
+              class="player-name-input text-sm sm:text-base"
+              title="오프라인 모드에서는 클릭하여 이름을 수정할 수 있습니다"
+              aria-label="흑돌 플레이어 이름" />
+          </div>
+        </div>
+
+        <!-- 백돌 플레이어 카드 -->
+        <div id="cardWhite" class="player-card px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3">
+          <span class="stone-icon stone-white w-7 h-7 sm:w-8 sm:h-8"></span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-1 mb-0.5">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span id="connDotWhite" class="hidden conn-dot online"></span>
+                <span class="text-[11px] font-semibold text-[#7a6450] truncate">후공 · 백</span>
+                <span id="meBadgeWhite" class="hidden px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#efe4d2] text-[#7a4c21] border border-[#d6be9c]">나</span>
+              </div>
+              <span id="badgeWhite" class="hidden px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-[#8c5a2b] text-[#fffaf2] shadow-sm flex-shrink-0">
+                현재 차례
+              </span>
+            </div>
+            <input id="nameWhite" type="text" value="백돌" maxlength="10"
+              class="player-name-input text-sm sm:text-base"
+              title="오프라인 모드에서는 클릭하여 이름을 수정할 수 있습니다"
+              aria-label="백돌 플레이어 이름" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 상단 상태 바 -->
+      <div class="w-full max-w-[640px] mb-3 wood-card px-4 py-2.5 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span id="turnStoneIcon" class="stone-icon stone-black w-5 h-5"></span>
+          <div class="min-w-0">
+            <span id="statusText" class="font-bold text-sm sm:text-base text-[#2a211b] block truncate">흑돌 차례입니다</span>
+            <p id="subStatusText" class="text-xs text-[#756252] truncate">원하는 교차점을 클릭하여 착수하세요</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div id="onlineRoomPill" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f4ead9] border border-[#dfd0b8] text-xs font-mono font-bold text-[#6b421c]">
+            <span class="conn-dot online"></span>
+            <span id="pillRoomCode">------</span>
+          </div>
+          <div class="text-right">
+            <div class="text-[11px] text-[#8a7562] font-medium">경과 수</div>
+            <div class="text-sm sm:text-base font-bold text-[#2a211b] tabular-nums"><span id="moveCountDisplay">0</span>수</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 오목판 프레임 -->
+      <div class="w-full max-w-[640px] board-frame">
+        <div id="boardContainer" class="board-inner w-full aspect-square">
+          <canvas id="gomokuCanvas" aria-label="15x15 오목판"></canvas>
+        </div>
+      </div>
+
+      <!-- 바둑판 하단 액션 버튼 -->
+      <div class="w-full max-w-[640px] mt-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <button id="btnUndo" type="button"
+          class="btn-secondary py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+          disabled>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          <span id="undoBtnLabel">무르기</span>
+        </button>
+
+        <!-- 오프라인: 새 게임 / 온라인: 기권 -->
+        <button id="btnNewGame" type="button"
+          class="btn-primary py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          새 게임
+        </button>
+
+        <button id="btnResign" type="button"
+          class="hidden btn-danger py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+          </svg>
+          기권하기
+        </button>
+
+        <button id="btnToggleNumbers" type="button"
+          class="col-span-2 sm:col-span-1 btn-secondary py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 text-[#7a4c21]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+          </svg>
+          <span id="numbersBtnLabel">수순 표시: 끄기</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 우측: 컨트롤 & 설정 패널 -->
+    <aside class="lg:col-span-5 xl:col-span-4 w-full max-w-[640px] mx-auto lg:max-w-none flex flex-col gap-4">
+
+      <!-- 온라인 전용: 빠른 인사 / 리액션 패널 -->
+      <div id="onlineReactionCard" class="hidden wood-card p-4">
+        <h2 class="text-sm font-bold text-[#3d2d20] flex items-center gap-1.5 mb-2.5">
+          <svg class="w-4 h-4 text-[#9b6633]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          빠른 인사 보내기
+        </h2>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-reaction="잘 부탁합니다! 🙇" class="btn-reaction btn-secondary py-2 px-2.5 rounded-xl text-xs font-semibold">잘 부탁합니다! 🙇</button>
+          <button type="button" data-reaction="좋은 수네요! 👏" class="btn-reaction btn-secondary py-2 px-2.5 rounded-xl text-xs font-semibold">좋은 수네요! 👏</button>
+          <button type="button" data-reaction="잠시만요! 🤔" class="btn-reaction btn-secondary py-2 px-2.5 rounded-xl text-xs font-semibold">잠시만요! 🤔</button>
+          <button type="button" data-reaction="한 판 더! 🔥" class="btn-reaction btn-secondary py-2 px-2.5 rounded-xl text-xs font-semibold">한 판 더! 🔥</button>
+        </div>
+      </div>
+
+      <!-- 전적 스코어보드 -->
+      <div class="wood-card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 id="statsTitle" class="text-sm font-bold text-[#3d2d20] flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-[#9b6633]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+            </svg>
+            대국 전적
+          </h2>
+          <button id="btnResetStats" type="button" class="text-xs text-[#8a7562] hover:text-[#5c3d22] underline underline-offset-2 transition">
+            전적 초기화
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2.5 text-center">
+          <div class="rounded-xl bg-[#f7f0e4] border border-[#e6d8c3] py-2.5 px-2">
+            <div class="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#4a3b2e] mb-1">
+              <span class="stone-icon stone-black w-3.5 h-3.5"></span>
+              <span id="statBlackName" class="truncate max-w-[64px]">흑돌</span>
+            </div>
+            <div id="statBlack" class="text-xl font-bold text-[#2a211b] tabular-nums">0</div>
+          </div>
+
+          <div class="rounded-xl bg-[#f7f0e4] border border-[#e6d8c3] py-2.5 px-2">
+            <div class="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#4a3b2e] mb-1">
+              <span class="stone-icon stone-white w-3.5 h-3.5"></span>
+              <span id="statWhiteName" class="truncate max-w-[64px]">백돌</span>
+            </div>
+            <div id="statWhite" class="text-xl font-bold text-[#2a211b] tabular-nums">0</div>
+          </div>
+
+          <div class="rounded-xl bg-[#f7f0e4] border border-[#e6d8c3] py-2.5 px-2">
+            <div class="text-xs font-semibold text-[#6e5d4f] mb-1">무승부</div>
+            <div id="statDraw" class="text-xl font-bold text-[#6e5d4f] tabular-nums">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 대국 설정 카드 -->
+      <div class="wood-card p-4 sm:p-5 flex flex-col gap-3.5">
+        <h2 class="text-sm font-bold text-[#3d2d20] flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-[#9b6633]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          대국 설정
+        </h2>
+
+        <!-- 렌주룰 토글 -->
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-sm font-bold text-[#2a211b] flex items-center gap-1.5">
+              렌주룰 (금수 적용)
+              <span class="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">X 표시</span>
+            </div>
+            <p id="renjuDescText" class="text-xs text-[#756252] mt-0.5 leading-relaxed">
+              흑돌에게 3-3, 4-4, 6목 이상(장목) 금수를 적용하고 착수 불가 위치를 표시합니다.
+            </p>
+          </div>
+          <button id="toggleRenju" type="button" role="switch" aria-checked="true" class="toggle-track on mt-0.5" aria-label="렌주룰 적용 토글">
+            <span class="toggle-thumb"></span>
+          </button>
+        </div>
+
+        <div id="offlineTipBox" class="rounded-xl bg-[#f7f0e4] border border-[#e6d8c3] px-3.5 py-2.5 text-xs text-[#6b5848] leading-relaxed">
+          <strong class="text-[#3d2d20]">Tip:</strong> 상단의 <span class="font-semibold text-[#8c5a2b]">흑돌 · 백돌 이름</span>을 클릭하면 친구 이름으로 자유롭게 바꿀 수 있습니다.
+        </div>
+      </div>
+
+      <!-- 규칙 안내 카드 -->
+      <div class="wood-card p-4 text-xs text-[#685747] leading-relaxed">
+        <div class="font-bold text-[#3d2d20] mb-1.5 flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-[#9b6633]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          오목 규칙 안내
+        </div>
+        <ul class="space-y-1 list-disc list-inside">
+          <li>흑돌이 먼저 시작하며, 흑돌과 백돌이 한 수씩 번갈아가며 착수합니다.</li>
+          <li>가로·세로·대각선으로 먼저 5개의 돌을 이으면 승리합니다.</li>
+          <li><strong>렌주룰 켜짐:</strong> 선공인 흑은 <span class="text-red-700 font-semibold">3-3, 4-4, 6목 이상</span>이 금지되며, 백은 모든 수가 허용됩니다.</li>
+          <li><strong>렌주룰 꺼짐:</strong> 흑·백 모두 금수 없이 5목 이상 완성 시 승리합니다.</li>
+        </ul>
+      </div>
+    </aside>
+  </main>
+
+  <!-- =========================================================================
+       모달 & 플로팅 알림 UI (alert / confirm 대체)
+       ========================================================================= -->
+
+  <!-- 1. 대국 결과 모달 -->
+  <div id="resultModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/45 backdrop-blur-[2px] p-4">
+    <div class="wood-card max-w-sm w-full p-6 text-center shadow-2xl border-2 border-[#c8a87a]">
+      <div class="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center bg-[#f4ead9] border-2 border-[#d4b687] shadow-inner">
+        <span id="resultStoneIcon" class="stone-icon stone-black w-10 h-10"></span>
+      </div>
+      <h3 id="resultTitle" class="font-serif-kr text-2xl font-bold text-[#2a211b] mb-1">흑돌 승리!</h3>
+      <p id="resultSubtitle" class="text-sm text-[#6e5d4f] mb-5">총 23수 만에 5목을 완성했습니다.</p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="btnModalClose" type="button" class="btn-secondary py-2.5 px-4 rounded-xl text-sm font-semibold">
+          바둑판 보기
+        </button>
+        <button id="btnModalRematch" type="button" class="btn-primary py-2.5 px-4 rounded-xl text-sm font-semibold">
+          다시 한 판
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 범용 확인 / 요청 수락 모달 -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/45 backdrop-blur-[2px] p-4">
+    <div class="wood-card max-w-sm w-full p-6 text-center shadow-2xl border-2 border-[#d1b48c]">
+      <h3 id="confirmTitle" class="font-serif-kr text-xl font-bold text-[#2a211b] mb-2">확인</h3>
+      <p id="confirmMessage" class="text-sm text-[#6e5d4f] leading-relaxed mb-5">진행하시겠습니까?</p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="btnConfirmCancel" type="button" class="btn-secondary py-2.5 px-4 rounded-xl text-sm font-semibold">
+          취소
+        </button>
+        <button id="btnConfirmOk" type="button" class="btn-primary py-2.5 px-4 rounded-xl text-sm font-semibold">
+          확인
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 온라인 연결 끊김 안내 모달 -->
+  <div id="disconnectModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-[2px] p-4">
+    <div class="wood-card max-w-sm w-full p-6 text-center shadow-2xl border-2 border-[#d99b94]">
+      <div class="w-14 h-14 mx-auto mb-3 rounded-full bg-red-100 border border-red-200 flex items-center justify-center text-red-600">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3" />
+        </svg>
+      </div>
+      <h3 class="font-serif-kr text-xl font-bold text-[#2a211b] mb-1.5">연결이 끊어졌습니다</h3>
+      <p id="disconnectMessage" class="text-sm text-[#6e5d4f] mb-5">상대방이 방을 나갔거나 네트워크 연결이 종료되었습니다.</p>
+      <button id="btnDisconnectLobby" type="button" class="btn-primary w-full py-2.5 rounded-xl text-sm font-bold">
+        로비로 돌아가기
+      </button>
+    </div>
+  </div>
+
+  <!-- 4. 상대방 빠른 인사 말풍선 (상단 중앙) -->
+  <div id="reactionContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none"></div>
+
+  <!-- 5. 토스트 알림 (하단 중앙) -->
+  <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none"></div>
+
+  <script>
+    /**
+     * =========================================================================
+     * 오목 (Gomoku) - 온라인 P2P (PeerJS) & 오프라인 2인 대전 에디션
+     * 단일 HTML 파일 · Vercel 즉시 배포 지원
+     * =========================================================================
+     */
+    (function () {
+      'use strict';
+
+      // ----- 상수 정의 -----
+      const BOARD_SIZE = 15;
+      const EMPTY = 0;
+      const BLACK = 1;
+      const WHITE = 2;
+      const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O'];
+      const STAR_POINTS = [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]];
+      const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+      const PEER_PREFIX = 'gomoku-room-v1-';
+      const ROOM_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+      // ----- 전역 게임 및 네트워크 상태 -----
+      const state = {
+        view: 'lobby',        // 'lobby' | 'online' | 'game'
+        mode: 'offline',      // 'offline' | 'online'
+        board: [],
+        history: [],          // [{ r, c, player }]
+        currentPlayer: BLACK,
+        gameOver: false,
+        winner: EMPTY,
+        winReason: 'five',    // 'five' | 'resign' | 'draw'
+        winningLine: [],
+        renjuRule: true,
+        showNumbers: false,
+        soundEnabled: true,
+        hoverPos: null,
+        forbiddenMap: new Map(),
+
+        // 오프라인 이름 및 전적
+        offlineNames: { black: '흑돌', white: '백돌' },
+        offlineStats: { black: 0, white: 0, draw: 0 },
+
+        // 온라인 전용 상태
+        online: {
+          nickname: '플레이어',
+          opponentName: '상대방',
+          isHost: false,
+          roomCode: '',
+          myColor: BLACK,       // BLACK or WHITE (재대국 시 교대)
+          connected: false,
+          hostRenju: true,
+          undoPending: false,
+          rematchPending: false,
+          sessionStats: { black: 0, white: 0, draw: 0 }
+        }
+      };
+
+      // ----- PeerJS 연결 객체 -----
+      let peer = null;
+      let conn = null;
+      let pingInterval = null;
+      let lastPongTime = 0;
+      let joinTimeout = null;
+      let intentionalClose = false;
+
+      // ----- DOM 참조 -----
+      const headerModeBadge = document.getElementById('headerModeBadge');
+      const btnGoLobby = document.getElementById('btnGoLobby');
+      const btnSound = document.getElementById('btnSound');
+      const iconSoundOn = document.getElementById('iconSoundOn');
+      const iconSoundOff = document.getElementById('iconSoundOff');
+      const soundLabel = document.getElementById('soundLabel');
+
+      // Views
+      const viewLobby = document.getElementById('viewLobby');
+      const viewOnline = document.getElementById('viewOnline');
+      const viewGame = document.getElementById('viewGame');
+
+      // Lobby buttons
+      const btnSelectOffline = document.getElementById('btnSelectOffline');
+      const btnSelectOnline = document.getElementById('btnSelectOnline');
+
+      // Online Lobby DOM
+      const onlineNickname = document.getElementById('onlineNickname');
+      const onlineTabs = document.getElementById('onlineTabs');
+      const tabCreateRoom = document.getElementById('tabCreateRoom');
+      const tabJoinRoom = document.getElementById('tabJoinRoom');
+      const panelCreateRoom = document.getElementById('panelCreateRoom');
+      const panelJoinRoom = document.getElementById('panelJoinRoom');
+      const toggleHostRenju = document.getElementById('toggleHostRenju');
+      const createSetupBox = document.getElementById('createSetupBox');
+      const createWaitingBox = document.getElementById('createWaitingBox');
+      const btnCreateRoom = document.getElementById('btnCreateRoom');
+      const displayRoomCode = document.getElementById('displayRoomCode');
+      const displayInviteLink = document.getElementById('displayInviteLink');
+      const btnCopyCode = document.getElementById('btnCopyCode');
+      const btnCopyLink = document.getElementById('btnCopyLink');
+      const waitingStatusText = document.getElementById('waitingStatusText');
+      const btnCancelRoom = document.getElementById('btnCancelRoom');
+      const inputJoinCode = document.getElementById('inputJoinCode');
+      const joinErrorBox = document.getElementById('joinErrorBox');
+      const btnJoinRoom = document.getElementById('btnJoinRoom');
+      const btnJoinRoomText = document.getElementById('btnJoinRoomText');
+
+      // Game DOM
+      const canvas = document.getElementById('gomokuCanvas');
+      const ctx = canvas.getContext('2d');
+      const boardContainer = document.getElementById('boardContainer');
+      const cardBlack = document.getElementById('cardBlack');
+      const cardWhite = document.getElementById('cardWhite');
+      const badgeBlack = document.getElementById('badgeBlack');
+      const badgeWhite = document.getElementById('badgeWhite');
+      const meBadgeBlack = document.getElementById('meBadgeBlack');
+      const meBadgeWhite = document.getElementById('meBadgeWhite');
+      const connDotBlack = document.getElementById('connDotBlack');
+      const connDotWhite = document.getElementById('connDotWhite');
+      const nameBlackInput = document.getElementById('nameBlack');
+      const nameWhiteInput = document.getElementById('nameWhite');
+
+      const turnStoneIcon = document.getElementById('turnStoneIcon');
+      const statusText = document.getElementById('statusText');
+      const subStatusText = document.getElementById('subStatusText');
+      const moveCountDisplay = document.getElementById('moveCountDisplay');
+      const onlineRoomPill = document.getElementById('onlineRoomPill');
+      const pillRoomCode = document.getElementById('pillRoomCode');
+
+      const btnUndo = document.getElementById('btnUndo');
+      const undoBtnLabel = document.getElementById('undoBtnLabel');
+      const btnNewGame = document.getElementById('btnNewGame');
+      const btnResign = document.getElementById('btnResign');
+      const btnToggleNumbers = document.getElementById('btnToggleNumbers');
+      const numbersBtnLabel = document.getElementById('numbersBtnLabel');
+
+      const onlineReactionCard = document.getElementById('onlineReactionCard');
+      const reactionBtns = document.querySelectorAll('.btn-reaction');
+      const statsTitle = document.getElementById('statsTitle');
+      const btnResetStats = document.getElementById('btnResetStats');
+      const statBlackName = document.getElementById('statBlackName');
+      const statWhiteName = document.getElementById('statWhiteName');
+      const statBlack = document.getElementById('statBlack');
+      const statWhite = document.getElementById('statWhite');
+      const statDraw = document.getElementById('statDraw');
+
+      const toggleRenju = document.getElementById('toggleRenju');
+      const renjuDescText = document.getElementById('renjuDescText');
+      const offlineTipBox = document.getElementById('offlineTipBox');
+
+      // Modals & Toasts
+      const resultModal = document.getElementById('resultModal');
+      const resultStoneIcon = document.getElementById('resultStoneIcon');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultSubtitle = document.getElementById('resultSubtitle');
+      const btnModalClose = document.getElementById('btnModalClose');
+      const btnModalRematch = document.getElementById('btnModalRematch');
+
+      const confirmModal = document.getElementById('confirmModal');
+      const confirmTitle = document.getElementById('confirmTitle');
+      const confirmMessage = document.getElementById('confirmMessage');
+      const btnConfirmCancel = document.getElementById('btnConfirmCancel');
+      const btnConfirmOk = document.getElementById('btnConfirmOk');
+
+      const disconnectModal = document.getElementById('disconnectModal');
+      const disconnectMessage = document.getElementById('disconnectMessage');
+      const btnDisconnectLobby = document.getElementById('btnDisconnectLobby');
+
+      const reactionContainer = document.getElementById('reactionContainer');
+      const toastContainer = document.getElementById('toastContainer');
+
+      // ----- 캔버스 레이아웃 캐시 -----
+      let canvasLogicalSize = 600;
+      let boardPadding = 34;
+      let cellSize = 38;
+      let woodCanvas = null;
+      let animFrameId = null;
+
+      // =========================================================================
+      // 1. Web Audio API 효과음 엔진
+      // =========================================================================
+      const SoundEngine = (() => {
+        let audioCtx = null;
+
+        function ensureContext() {
+          if (!state.soundEnabled) return null;
+          try {
+            if (!audioCtx) {
+              const AudioCtx = window.AudioContext || window.webkitAudioContext;
+              if (!AudioCtx) return null;
+              audioCtx = new AudioCtx();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            return audioCtx;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function playStonePlace(player) {
+          const ac = ensureContext();
+          if (!ac) return;
+          const now = ac.currentTime;
+
+          const bufferSize = Math.floor(ac.sampleRate * 0.035);
+          const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+          const data = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.005));
+          }
+          const noise = ac.createBufferSource();
+          noise.buffer = noiseBuffer;
+
+          const bandpass = ac.createBiquadFilter();
+          bandpass.type = 'bandpass';
+          bandpass.frequency.setValueAtTime(player === BLACK ? 1650 : 1950, now);
+          bandpass.Q.setValueAtTime(1.8, now);
+
+          const noiseGain = ac.createGain();
+          noiseGain.gain.setValueAtTime(0.65, now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+          noise.connect(bandpass);
+          bandpass.connect(noiseGain);
+          noiseGain.connect(ac.destination);
+          noise.start(now);
+
+          const osc = ac.createOscillator();
+          const oscGain = ac.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(player === BLACK ? 310 : 350, now);
+          osc.frequency.exponentialRampToValueAtTime(115, now + 0.055);
+          oscGain.gain.setValueAtTime(0.32, now);
+          oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+          osc.connect(oscGain);
+          oscGain.connect(ac.destination);
+          osc.start(now);
+          osc.stop(now + 0.065);
+        }
+
+        function playForbidden() {
+          const ac = ensureContext();
+          if (!ac) return;
+          const now = ac.currentTime;
+          const osc = ac.createOscillator();
+          const gain = ac.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.linearRampToValueAtTime(175, now + 0.14);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.connect(gain);
+          gain.connect(ac.destination);
+          osc.start(now);
+          osc.stop(now + 0.16);
+        }
+
+        function playWin() {
+          const ac = ensureContext();
+          if (!ac) return;
+          const now = ac.currentTime;
+          [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+            const osc = ac.createOscillator();
+            const gain = ac.createGain();
+            osc.type = 'triangle';
+            const start = now + idx * 0.09;
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.001, start);
+            gain.gain.linearRampToValueAtTime(0.16, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.45);
+            osc.connect(gain);
+            gain.connect(ac.destination);
+            osc.start(start);
+            osc.stop(start + 0.48);
+          });
+        }
+
+        function playNotify() {
+          const ac = ensureContext();
+          if (!ac) return;
+          const now = ac.currentTime;
+          const osc = ac.createOscillator();
+          const gain = ac.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(660, now);
+          osc.frequency.setValueAtTime(880, now + 0.08);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.connect(gain);
+          gain.connect(ac.destination);
+          osc.start(now);
+          osc.stop(now + 0.24);
+        }
+
+        return { playStonePlace, playForbidden, playWin, playNotify };
+      })();
+
+      // =========================================================================
+      // 2. 유틸리티: 토스트, 말풍선, 확인 모달, 클립보드 복사
+      // =========================================================================
+      let toastTimeout = null;
+      function showToast(message, type = 'info') {
+        if (toastTimeout) clearTimeout(toastTimeout);
+        const colors = {
+          info: 'bg-[#2a211b] text-[#fff8ee] border-[#594332]',
+          warn: 'bg-[#8f261e] text-white border-[#b93e34]',
+          success: 'bg-[#2d5a34] text-white border-[#407a49]'
+        };
+        toastContainer.innerHTML = `
+          <div class="toast-box px-4 py-2.5 rounded-xl border shadow-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${colors[type] || colors.info}">
+            ${escapeHtml(message)}
+          </div>
+        `;
+        toastTimeout = setTimeout(() => { toastContainer.innerHTML = ''; }, 2500);
+      }
+
+      let reactionTimeout = null;
+      function showReactionBubble(senderName, text) {
+        if (reactionTimeout) clearTimeout(reactionTimeout);
+        reactionContainer.innerHTML = `
+          <div class="reaction-pop px-4 py-2.5 rounded-2xl bg-[#fffdf9] border-2 border-[#9b6633] shadow-2xl flex items-center gap-2 whitespace-nowrap">
+            <span class="text-xs font-bold text-[#8c5a2b]">${escapeHtml(senderName)}</span>
+            <span class="text-sm font-bold text-[#2a211b]">${escapeHtml(text)}</span>
+          </div>
+        `;
+        reactionTimeout = setTimeout(() => { reactionContainer.innerHTML = ''; }, 3200);
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // 범용 확인 모달 (alert/confirm 대체)
+      let confirmCallbacks = { onOk: null, onCancel: null };
+      function openConfirmModal({ title, message, okText = '확인', cancelText = '취소', onOk, onCancel }) {
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        btnConfirmOk.textContent = okText;
+        btnConfirmCancel.textContent = cancelText;
+        confirmCallbacks = { onOk: onOk || null, onCancel: onCancel || null };
+        confirmModal.classList.remove('hidden');
+        confirmModal.classList.add('flex');
+      }
+
+      function closeConfirmModal() {
+        confirmModal.classList.add('hidden');
+        confirmModal.classList.remove('flex');
+        confirmCallbacks = { onOk: null, onCancel: null };
+      }
+
+      btnConfirmOk.addEventListener('click', () => {
+        const cb = confirmCallbacks.onOk;
+        closeConfirmModal();
+        if (cb) cb();
+      });
+      btnConfirmCancel.addEventListener('click', () => {
+        const cb = confirmCallbacks.onCancel;
+        closeConfirmModal();
+        if (cb) cb();
+      });
+
+      // iFrame / HTTPS 환경 모두 안전하게 지원하는 클립보드 복사
+      function copyToClipboard(text, successMsg) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) {
+            showToast(successMsg, 'success');
+            return;
+          }
+        } catch (e) { /* fallback */ }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text)
+            .then(() => showToast(successMsg, 'success'))
+            .catch(() => showToast('복사에 실패했습니다. 직접 선택해 복사해 주세요.', 'warn'));
+        } else {
+          showToast('복사에 실패했습니다. 직접 선택해 복사해 주세요.', 'warn');
+        }
+      }
+
+      // =========================================================================
+      // 3. 화면 전환 (로비 / 온라인 메뉴 / 게임)
+      // =========================================================================
+      function showView(viewName) {
+        state.view = viewName;
+        viewLobby.classList.toggle('hidden', viewName !== 'lobby');
+        viewOnline.classList.toggle('hidden', viewName !== 'online');
+        viewGame.classList.toggle('hidden', viewName !== 'game');
+        btnGoLobby.classList.toggle('hidden', viewName === 'lobby');
+
+        if (viewName === 'lobby') {
+          headerModeBadge.textContent = 'Gomoku';
+        } else if (viewName === 'online') {
+          headerModeBadge.textContent = '온라인 로비';
+        } else if (viewName === 'game') {
+          headerModeBadge.textContent = state.mode === 'online' ? '온라인 대전' : '오프라인 2인 대전';
+          configureGameViewForMode();
+          requestAnimationFrame(() => resizeCanvas());
+        }
+      }
+
+      function configureGameViewForMode() {
+        const isOnline = state.mode === 'online';
+
+        // 온라인/오프라인별 요소 가시성
+        btnNewGame.classList.toggle('hidden', isOnline);
+        btnResign.classList.toggle('hidden', !isOnline);
+        onlineReactionCard.classList.toggle('hidden', !isOnline);
+        onlineRoomPill.classList.toggle('hidden', !isOnline);
+        btnResetStats.classList.toggle('hidden', isOnline);
+        offlineTipBox.classList.toggle('hidden', isOnline);
+        connDotBlack.classList.toggle('hidden', !isOnline);
+        connDotWhite.classList.toggle('hidden', !isOnline);
+
+        nameBlackInput.disabled = isOnline;
+        nameWhiteInput.disabled = isOnline;
+        toggleRenju.disabled = isOnline;
+
+        undoBtnLabel.textContent = isOnline ? '무르기 요청' : '무르기';
+        statsTitle.lastChild.textContent = isOnline ? ' 현재 방 전적' : ' 대국 전적';
+        renjuDescText.textContent = isOnline
+          ? '방장이 설정한 렌주룰이 양쪽에 동일하게 적용됩니다.'
+          : '흑돌에게 3-3, 4-4, 6목 이상(장목) 금수를 적용하고 착수 불가 위치를 표시합니다.';
+
+        if (isOnline) {
+          pillRoomCode.textContent = state.online.roomCode;
+        }
+      }
+
+      function clearUrlRoomParam() {
+        try {
+          if (window.location.search.includes('room=')) {
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+          }
+        } catch (e) { /* 무시 */ }
+      }
+
+      function returnToLobby() {
+        stopWinAnimation();
+        closeResultModal();
+        closeConfirmModal();
+        disconnectModal.classList.add('hidden');
+        disconnectModal.classList.remove('flex');
+        cleanupNetwork(true);
+        resetOnlineLobbyUI();
+        clearUrlRoomParam();
+        showView('lobby');
+      }
+
+      // =========================================================================
+      // 4. 오목 규칙 & 렌주룰(금수) 판정 엔진
+      // =========================================================================
+      function inBounds(r, c) {
+        return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+      }
+
+      function createEmptyBoard() {
+        return Array.from({ length: BOARD_SIZE }, () => new Array(BOARD_SIZE).fill(EMPTY));
+      }
+
+      function countConsecutive(board, r, c, dr, dc, player) {
+        let count = 1;
+        let nr = r + dr, nc = c + dc;
+        while (inBounds(nr, nc) && board[nr][nc] === player) { count++; nr += dr; nc += dc; }
+        nr = r - dr; nc = c - dc;
+        while (inBounds(nr, nc) && board[nr][nc] === player) { count++; nr -= dr; nc -= dc; }
+        return count;
+      }
+
+      function getWinningLine(board, r, c, player) {
+        const exactOnly = state.renjuRule && player === BLACK;
+        for (const [dr, dc] of DIRS) {
+          const line = [[r, c]];
+          let nr = r + dr, nc = c + dc;
+          while (inBounds(nr, nc) && board[nr][nc] === player) { line.push([nr, nc]); nr += dr; nc += dc; }
+          nr = r - dr; nc = c - dc;
+          while (inBounds(nr, nc) && board[nr][nc] === player) { line.unshift([nr, nc]); nr -= dr; nc -= dc; }
+          if (exactOnly) {
+            if (line.length === 5) return line;
+          } else {
+            if (line.length >= 5) return line.slice(0, 5);
+          }
+        }
+        return null;
+      }
+
+      function isExactFiveForBlack(board, r, c) {
+        for (const [dr, dc] of DIRS) {
+          if (countConsecutive(board, r, c, dr, dc, BLACK) === 5) return true;
+        }
+        return false;
+      }
+
+      function isOverlineForBlack(board, r, c) {
+        for (const [dr, dc] of DIRS) {
+          if (countConsecutive(board, r, c, dr, dc, BLACK) >= 6) return true;
+        }
+        return false;
+      }
+
+      function countFoursInDir(board, r, c, dr, dc) {
+        const winningSpots = [];
+        for (let step = -4; step <= 4; step++) {
+          const tr = r + dr * step;
+          const tc = c + dc * step;
+          if (!inBounds(tr, tc) || board[tr][tc] !== EMPTY) continue;
+          board[tr][tc] = BLACK;
+          const cnt = countConsecutive(board, tr, tc, dr, dc, BLACK);
+          board[tr][tc] = EMPTY;
+          if (cnt === 5) {
+            let includesOrigin = false;
+            let sr = tr, sc = tc;
+            while (inBounds(sr, sc) && (board[sr][sc] === BLACK || (sr === tr && sc === tc))) {
+              if (sr === r && sc === c) includesOrigin = true;
+              sr += dr; sc += dc;
+            }
+            sr = tr - dr; sc = tc - dc;
+            while (inBounds(sr, sc) && board[sr][sc] === BLACK) {
+              if (sr === r && sc === c) includesOrigin = true;
+              sr -= dr; sc -= dc;
+            }
+            if (includesOrigin) winningSpots.push([tr, tc]);
+          }
+        }
+        if (winningSpots.length <= 1) return winningSpots.length;
+        const contiguous = countConsecutive(board, r, c, dr, dc, BLACK);
+        if (contiguous === 4 && winningSpots.length === 2) return 1;
+        return winningSpots.length;
+      }
+
+      function makesOpenFourInDir(board, r, c, dr, dc) {
+        if (countConsecutive(board, r, c, dr, dc, BLACK) !== 4) return false;
+        let pr = r + dr, pc = c + dc;
+        while (inBounds(pr, pc) && board[pr][pc] === BLACK) { pr += dr; pc += dc; }
+        let nr = r - dr, nc = c - dc;
+        while (inBounds(nr, nc) && board[nr][nc] === BLACK) { nr -= dr; nc -= dc; }
+        if (!inBounds(pr, pc) || board[pr][pc] !== EMPTY) return false;
+        if (!inBounds(nr, nc) || board[nr][nc] !== EMPTY) return false;
+
+        board[pr][pc] = BLACK;
+        const c1 = countConsecutive(board, pr, pc, dr, dc, BLACK);
+        board[pr][pc] = EMPTY;
+
+        board[nr][nc] = BLACK;
+        const c2 = countConsecutive(board, nr, nc, dr, dc, BLACK);
+        board[nr][nc] = EMPTY;
+
+        return c1 === 5 && c2 === 5;
+      }
+
+      function isOpenThreeInDir(board, r, c, dr, dc, depth) {
+        for (let step = -3; step <= 3; step++) {
+          const tr = r + dr * step;
+          const tc = c + dc * step;
+          if (!inBounds(tr, tc) || board[tr][tc] !== EMPTY) continue;
+          board[tr][tc] = BLACK;
+          const formsOpenFour = makesOpenFourInDir(board, tr, tc, dr, dc);
+          if (formsOpenFour) {
+            let includesOrigin = false;
+            let sr = tr, sc = tc;
+            while (inBounds(sr, sc) && board[sr][sc] === BLACK) {
+              if (sr === r && sc === c) includesOrigin = true;
+              sr += dr; sc += dc;
+            }
+            sr = tr - dr; sc = tc - dc;
+            while (inBounds(sr, sc) && board[sr][sc] === BLACK) {
+              if (sr === r && sc === c) includesOrigin = true;
+              sr -= dr; sc -= dc;
+            }
+            board[tr][tc] = EMPTY;
+            if (includesOrigin) {
+              if (depth > 0) {
+                if (!checkForbiddenMove(board, tr, tc, depth - 1)) return true;
+              } else {
+                return true;
+              }
+            }
+          } else {
+            board[tr][tc] = EMPTY;
+          }
+        }
+        return false;
+      }
+
+      function checkForbiddenMove(board, r, c, depth = 2) {
+        if (!inBounds(r, c) || board[r][c] !== EMPTY) return null;
+        board[r][c] = BLACK;
+
+        if (isExactFiveForBlack(board, r, c)) { board[r][c] = EMPTY; return null; }
+        if (isOverlineForBlack(board, r, c)) { board[r][c] = EMPTY; return '장목'; }
+
+        let totalFours = 0;
+        for (const [dr, dc] of DIRS) totalFours += countFoursInDir(board, r, c, dr, dc);
+        if (totalFours >= 2) { board[r][c] = EMPTY; return '4-4'; }
+
+        let totalOpenThrees = 0;
+        for (const [dr, dc] of DIRS) {
+          if (isOpenThreeInDir(board, r, c, dr, dc, depth)) totalOpenThrees++;
+        }
+        board[r][c] = EMPTY;
+        if (totalOpenThrees >= 2) return '3-3';
+        return null;
+      }
+
+      function hasNeighborStone(board, r, c, dist, targetColor) {
+        const rMin = Math.max(0, r - dist), rMax = Math.min(BOARD_SIZE - 1, r + dist);
+        const cMin = Math.max(0, c - dist), cMax = Math.min(BOARD_SIZE - 1, c + dist);
+        for (let nr = rMin; nr <= rMax; nr++) {
+          for (let nc = cMin; nc <= cMax; nc++) {
+            if (nr === r && nc === c) continue;
+            if (board[nr][nc] === targetColor) return true;
+          }
+        }
+        return false;
+      }
+
+      function updateForbiddenMap() {
+        state.forbiddenMap.clear();
+        if (!state.renjuRule || state.gameOver || state.currentPlayer !== BLACK) return;
+        if (state.history.length < 4) return;
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            if (state.board[r][c] !== EMPTY) continue;
+            if (!hasNeighborStone(state.board, r, c, 2, BLACK)) continue;
+            const reason = checkForbiddenMove(state.board, r, c, 2);
+            if (reason) state.forbiddenMap.set(`${r},${c}`, reason);
+          }
+        }
+      }
+
+      // =========================================================================
+      // 5. 오목판 캔버스 렌더링 엔진
+      // =========================================================================
+      function buildWoodTexture(size) {
+        const off = document.createElement('canvas');
+        off.width = size;
+        off.height = size;
+        const octx = off.getContext('2d');
+
+        const baseGrad = octx.createLinearGradient(0, 0, size, size);
+        baseGrad.addColorStop(0, '#e5bc78');
+        baseGrad.addColorStop(0.5, '#d9aa61');
+        baseGrad.addColorStop(1, '#ca964a');
+        octx.fillStyle = baseGrad;
+        octx.fillRect(0, 0, size, size);
+
+        octx.save();
+        for (let i = 0; i < 110; i++) {
+          const yBase = (i / 110) * size;
+          const alpha = 0.03 + (i % 5) * 0.012;
+          octx.strokeStyle = i % 2 === 0 ? `rgba(110, 65, 22, ${alpha})` : `rgba(255, 232, 185, ${alpha * 0.7})`;
+          octx.lineWidth = 1 + (i % 3) * 0.8;
+          octx.beginPath();
+          const freq = 0.006 + (i % 7) * 0.0012;
+          const amp = 2 + (i % 4) * 1.4;
+          const phase = i * 0.7;
+          octx.moveTo(0, yBase);
+          for (let x = 0; x <= size; x += 24) {
+            octx.lineTo(x, yBase + Math.sin(x * freq + phase) * amp);
+          }
+          octx.stroke();
+        }
+        const vig = octx.createRadialGradient(size / 2, size / 2, size * 0.32, size / 2, size / 2, size * 0.74);
+        vig.addColorStop(0, 'rgba(255, 244, 220, 0.08)');
+        vig.addColorStop(1, 'rgba(72, 40, 12, 0.16)');
+        octx.fillStyle = vig;
+        octx.fillRect(0, 0, size, size);
+        octx.restore();
+        return off;
+      }
+
+      function resizeCanvas() {
+        if (state.view !== 'game') return;
+        const rect = boardContainer.getBoundingClientRect();
+        if (rect.width < 50) return;
+        const size = Math.max(260, Math.floor(rect.width));
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+
+        canvasLogicalSize = size;
+        canvas.width = Math.floor(size * dpr);
+        canvas.height = Math.floor(size * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        boardPadding = Math.max(24, Math.floor(size * 0.068));
+        cellSize = (size - boardPadding * 2) / (BOARD_SIZE - 1);
+        woodCanvas = buildWoodTexture(size);
+        drawBoard();
+      }
+
+      function gridToPixel(r, c) {
+        return { x: boardPadding + c * cellSize, y: boardPadding + r * cellSize };
+      }
+
+      function pixelToGrid(x, y) {
+        const c = Math.round((x - boardPadding) / cellSize);
+        const r = Math.round((y - boardPadding) / cellSize);
+        if (!inBounds(r, c)) return null;
+        const pos = gridToPixel(r, c);
+        if (Math.hypot(x - pos.x, y - pos.y) > cellSize * 0.48) return null;
+        return { r, c };
+      }
+
+      function drawStone(x, y, radius, player, alpha = 1) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (alpha > 0.7) {
+          ctx.beginPath();
+          ctx.arc(x + radius * 0.12, y + radius * 0.16, radius * 0.98, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(30, 18, 6, 0.36)';
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(x - radius * 0.32, y - radius * 0.32, radius * 0.08, x, y, radius * 1.05);
+        if (player === BLACK) {
+          grad.addColorStop(0, '#626262');
+          grad.addColorStop(0.28, '#2b2b2b');
+          grad.addColorStop(0.72, '#121212');
+          grad.addColorStop(1, '#040404');
+        } else {
+          grad.addColorStop(0, '#ffffff');
+          grad.addColorStop(0.45, '#f4f0e8');
+          grad.addColorStop(0.82, '#dad2c4');
+          grad.addColorStop(1, '#b8ae9e');
+        }
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        if (player === WHITE) {
+          ctx.strokeStyle = 'rgba(130, 118, 102, 0.45)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.ellipse(x - radius * 0.28, y - radius * 0.3, radius * 0.22, radius * 0.13, -Math.PI / 4, 0, Math.PI * 2);
+        ctx.fillStyle = player === BLACK ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.78)';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawForbiddenMark(x, y, size) {
+        ctx.save();
+        const r = size * 0.24;
+        ctx.strokeStyle = 'rgba(204, 34, 24, 0.86)';
+        ctx.lineWidth = Math.max(2, size * 0.08);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r);
+        ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function canInteractNow() {
+        if (state.gameOver) return false;
+        if (state.mode === 'offline') return true;
+        return state.online.connected && state.currentPlayer === state.online.myColor;
+      }
+
+      function drawBoard(timestamp = 0) {
+        const size = canvasLogicalSize;
+        ctx.clearRect(0, 0, size, size);
+        if (woodCanvas) ctx.drawImage(woodCanvas, 0, 0, size, size);
+
+        const start = boardPadding;
+        const end = boardPadding + (BOARD_SIZE - 1) * cellSize;
+
+        // 격자선
+        ctx.save();
+        ctx.strokeStyle = 'rgba(54, 34, 15, 0.82)';
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          const pos = start + i * cellSize;
+          ctx.lineWidth = (i === 0 || i === BOARD_SIZE - 1) ? 1.8 : 1.05;
+          ctx.beginPath(); ctx.moveTo(start, pos); ctx.lineTo(end, pos); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(pos, start); ctx.lineTo(pos, end); ctx.stroke();
+        }
+        ctx.restore();
+
+        // 화점
+        ctx.save();
+        ctx.fillStyle = '#36220f';
+        const starRadius = Math.max(3, cellSize * 0.115);
+        for (const [sr, sc] of STAR_POINTS) {
+          const p = gridToPixel(sr, sc);
+          ctx.beginPath(); ctx.arc(p.x, p.y, starRadius, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+
+        // 좌표
+        ctx.save();
+        const fontSize = Math.max(9, Math.min(12, Math.floor(boardPadding * 0.36)));
+        ctx.font = `600 ${fontSize}px 'Noto Sans KR', sans-serif`;
+        ctx.fillStyle = 'rgba(66, 42, 18, 0.78)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const labelOffset = boardPadding * 0.52;
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          const pos = start + i * cellSize;
+          ctx.fillText(COL_LABELS[i], pos, end + labelOffset);
+          ctx.fillText(COL_LABELS[i], pos, start - labelOffset);
+          const rowNum = String(BOARD_SIZE - i);
+          ctx.fillText(rowNum, start - labelOffset, pos);
+          ctx.fillText(rowNum, end + labelOffset, pos);
+        }
+        ctx.restore();
+
+        // 금수 X 표시 (흑 차례일 때)
+        if (state.renjuRule && !state.gameOver && state.currentPlayer === BLACK && state.forbiddenMap.size > 0) {
+          for (const key of state.forbiddenMap.keys()) {
+            const [fr, fc] = key.split(',').map(Number);
+            const p = gridToPixel(fr, fc);
+            drawForbiddenMark(p.x, p.y, cellSize);
+          }
+        }
+
+        // 마우스 호버 착수 미리보기 (본인 차례일 때만)
+        const stoneRadius = cellSize * 0.44;
+        if (state.hoverPos && canInteractNow() && state.board[state.hoverPos.r][state.hoverPos.c] === EMPTY) {
+          const key = `${state.hoverPos.r},${state.hoverPos.c}`;
+          const p = gridToPixel(state.hoverPos.r, state.hoverPos.c);
+          if (state.forbiddenMap.has(key)) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, stoneRadius * 0.85, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.16)';
+            ctx.fill();
+            ctx.restore();
+          } else {
+            drawStone(p.x, p.y, stoneRadius, state.currentPlayer, 0.45);
+          }
+        }
+
+        // 놓인 돌 렌더링
+        for (let i = 0; i < state.history.length; i++) {
+          const move = state.history[i];
+          const p = gridToPixel(move.r, move.c);
+          drawStone(p.x, p.y, stoneRadius, move.player, 1);
+
+          if (state.showNumbers) {
+            ctx.save();
+            const numFont = Math.max(9, Math.floor(stoneRadius * 0.82));
+            ctx.font = `700 ${numFont}px 'Noto Sans KR', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const isLast = i === state.history.length - 1;
+            ctx.fillStyle = move.player === BLACK
+              ? (isLast ? '#ffda79' : '#f5f5f5')
+              : (isLast ? '#c92a2a' : '#222222');
+            ctx.fillText(String(i + 1), p.x, p.y + 0.5);
+            ctx.restore();
+          }
+        }
+
+        // 마지막 착수 마커
+        if (state.history.length > 0 && !state.gameOver) {
+          const last = state.history[state.history.length - 1];
+          const p = gridToPixel(last.r, last.c);
+          ctx.save();
+          if (state.showNumbers) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, stoneRadius * 0.92, 0, Math.PI * 2);
+            ctx.strokeStyle = last.player === BLACK ? '#ffbe3d' : '#e03131';
+            ctx.lineWidth = 2.2;
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, stoneRadius * 0.28, 0, Math.PI * 2);
+            ctx.fillStyle = '#e03131';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 승리 5목 하이라이트
+        if (state.gameOver && state.winningLine.length >= 5) {
+          const pulse = 0.72 + 0.28 * Math.sin(timestamp * 0.006);
+          const first = gridToPixel(state.winningLine[0][0], state.winningLine[0][1]);
+          const last = gridToPixel(
+            state.winningLine[state.winningLine.length - 1][0],
+            state.winningLine[state.winningLine.length - 1][1]
+          );
+          ctx.save();
+          ctx.strokeStyle = `rgba(255, 200, 60, ${0.88 * pulse})`;
+          ctx.lineWidth = Math.max(4, stoneRadius * 0.32);
+          ctx.lineCap = 'round';
+          ctx.shadowColor = 'rgba(255, 174, 0, 0.95)';
+          ctx.shadowBlur = 14;
+          ctx.beginPath(); ctx.moveTo(first.x, first.y); ctx.lineTo(last.x, last.y); ctx.stroke();
+          for (const [wr, wc] of state.winningLine) {
+            const p = gridToPixel(wr, wc);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, stoneRadius * 1.06, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 214, 70, ${pulse})`;
+            ctx.lineWidth = 2.8;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      function startWinAnimation() {
+        stopWinAnimation();
+        function loop(ts) {
+          if (!state.gameOver || state.winningLine.length === 0) return;
+          drawBoard(ts);
+          animFrameId = requestAnimationFrame(loop);
+        }
+        animFrameId = requestAnimationFrame(loop);
+      }
+
+      function stopWinAnimation() {
+        if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+      }
+
+      // =========================================================================
+      // 6. 게임 진행 및 UI 동기화 로직
+      // =========================================================================
+      function getPlayerName(player) {
+        if (state.mode === 'online') {
+          if (player === state.online.myColor) return state.online.nickname || '나';
+          return state.online.opponentName || '상대방';
+        }
+        return player === BLACK ? (state.offlineNames.black || '흑돌') : (state.offlineNames.white || '백돌');
+      }
+
+      function getActiveStats() {
+        return state.mode === 'online' ? state.online.sessionStats : state.offlineStats;
+      }
+
+      function loadSavedData() {
+        try {
+          const savedStats = localStorage.getItem('gomoku_kr_pvp_stats_v1');
+          if (savedStats) {
+            const p = JSON.parse(savedStats);
+            state.offlineStats = { black: Number(p.black) || 0, white: Number(p.white) || 0, draw: Number(p.draw) || 0 };
+          }
+          const savedNames = localStorage.getItem('gomoku_kr_pvp_names_v1');
+          if (savedNames) {
+            const n = JSON.parse(savedNames);
+            if (n.black) state.offlineNames.black = String(n.black).slice(0, 10);
+            if (n.white) state.offlineNames.white = String(n.white).slice(0, 10);
+          }
+          const savedNick = localStorage.getItem('gomoku_kr_online_nick_v1');
+          if (savedNick) state.online.nickname = String(savedNick).slice(0, 10);
+        } catch (e) { /* 무시 */ }
+        onlineNickname.value = state.online.nickname;
+      }
+
+      function saveOfflineStats() {
+        try { localStorage.setItem('gomoku_kr_pvp_stats_v1', JSON.stringify(state.offlineStats)); } catch (e) {}
+      }
+
+      function saveOfflineNames() {
+        try { localStorage.setItem('gomoku_kr_pvp_names_v1', JSON.stringify(state.offlineNames)); } catch (e) {}
+      }
+
+      function saveOnlineNickname() {
+        try { localStorage.setItem('gomoku_kr_online_nick_v1', state.online.nickname); } catch (e) {}
+      }
+
+      function renderStats() {
+        const st = getActiveStats();
+        statBlackName.textContent = getPlayerName(BLACK);
+        statWhiteName.textContent = getPlayerName(WHITE);
+        statBlack.textContent = st.black;
+        statWhite.textContent = st.white;
+        statDraw.textContent = st.draw;
+      }
+
+      function updateUI() {
+        const isOnline = state.mode === 'online';
+        moveCountDisplay.textContent = state.history.length;
+
+        // 이름 입력칸 동기화
+        if (document.activeElement !== nameBlackInput) nameBlackInput.value = getPlayerName(BLACK);
+        if (document.activeElement !== nameWhiteInput) nameWhiteInput.value = getPlayerName(WHITE);
+
+        // 온라인 '(나)' 배지 & 연결 상태 점
+        meBadgeBlack.classList.toggle('hidden', !(isOnline && state.online.myColor === BLACK));
+        meBadgeWhite.classList.toggle('hidden', !(isOnline && state.online.myColor === WHITE));
+
+        if (isOnline) {
+          const oppDot = state.online.myColor === BLACK ? connDotWhite : connDotBlack;
+          const myDot = state.online.myColor === BLACK ? connDotBlack : connDotWhite;
+          myDot.className = 'conn-dot online';
+          oppDot.className = `conn-dot ${state.online.connected ? 'online' : 'offline'}`;
+        }
+
+        // 버튼 활성 상태
+        btnUndo.disabled = state.history.length === 0 || (isOnline && (!state.online.connected || state.gameOver || state.online.undoPending));
+        btnResign.disabled = !isOnline || state.gameOver || !state.online.connected;
+
+        // 캔버스 커서 클래스
+        canvas.classList.toggle('not-my-turn', !canInteractNow());
+
+        // 렌주룰 스위치 UI 동기화
+        toggleRenju.classList.toggle('on', state.renjuRule);
+        toggleRenju.setAttribute('aria-checked', String(state.renjuRule));
+
+        // 턴 카드 강조
+        const isBlackTurn = !state.gameOver && state.currentPlayer === BLACK;
+        const isWhiteTurn = !state.gameOver && state.currentPlayer === WHITE;
+        cardBlack.classList.toggle('active', isBlackTurn);
+        cardWhite.classList.toggle('active', isWhiteTurn);
+        badgeBlack.classList.toggle('hidden', !isBlackTurn);
+        badgeWhite.classList.toggle('hidden', !isWhiteTurn);
+
+        // 상단 상태 바 텍스트
+        if (state.gameOver) {
+          if (state.winner === BLACK) {
+            turnStoneIcon.className = 'stone-icon stone-black w-5 h-5';
+            statusText.textContent = `${getPlayerName(BLACK)} 승리!`;
+            subStatusText.textContent = state.winReason === 'resign'
+              ? `${getPlayerName(WHITE)}의 기권으로 대국이 종료되었습니다.`
+              : `${state.history.length}수 만에 5목을 완성했습니다.`;
+          } else if (state.winner === WHITE) {
+            turnStoneIcon.className = 'stone-icon stone-white w-5 h-5';
+            statusText.textContent = `${getPlayerName(WHITE)} 승리!`;
+            subStatusText.textContent = state.winReason === 'resign'
+              ? `${getPlayerName(BLACK)}의 기권으로 대국이 종료되었습니다.`
+              : `${state.history.length}수 만에 5목을 완성했습니다.`;
+          } else {
+            turnStoneIcon.className = 'stone-icon w-5 h-5 bg-[#cbb89d]';
+            statusText.textContent = '무승부입니다';
+            subStatusText.textContent = '모든 교차점이 채워졌습니다.';
+          }
+        } else {
+          const isBlack = state.currentPlayer === BLACK;
+          const currentName = getPlayerName(state.currentPlayer);
+          turnStoneIcon.className = `stone-icon ${isBlack ? 'stone-black' : 'stone-white'} w-5 h-5`;
+
+          if (isOnline) {
+            const isMyTurn = state.currentPlayer === state.online.myColor;
+            statusText.textContent = isMyTurn ? `내 차례입니다 (${currentName})` : `${currentName}의 차례입니다`;
+            subStatusText.textContent = isMyTurn
+              ? (state.renjuRule && isBlack && state.forbiddenMap.size > 0
+                  ? '빨간 X 표시는 렌주룰 금수 위치입니다.'
+                  : '원하는 교차점을 클릭하여 착수하세요.')
+              : '상대방의 착수를 기다리는 중...';
+          } else {
+            statusText.textContent = `${currentName} 차례입니다`;
+            subStatusText.textContent = state.renjuRule && isBlack && state.forbiddenMap.size > 0
+              ? '빨간 X 표시는 렌주룰 금수 위치입니다.'
+              : '원하는 교차점을 클릭하여 착수하세요.';
+          }
+        }
+
+        renderStats();
+      }
+
+      // 돌 착수 공통 로직 (fromRemote: 온라인 상대방이 보낸 수인지 여부)
+      function applyMove(r, c, fromRemote = false) {
+        if (state.gameOver || !inBounds(r, c) || state.board[r][c] !== EMPTY) return false;
+
+        // 렌주룰 금수 검사
+        if (state.renjuRule && state.currentPlayer === BLACK) {
+          const reason = state.forbiddenMap.get(`${r},${c}`) || checkForbiddenMove(state.board, r, c, 2);
+          if (reason) {
+            if (!fromRemote) {
+              SoundEngine.playForbidden();
+              showToast(`금수(${reason}) 위치에는 흑돌을 둘 수 없습니다.`, 'warn');
+            }
+            return false;
+          }
+        }
+
+        const player = state.currentPlayer;
+        state.board[r][c] = player;
+        state.history.push({ r, c, player });
+        state.hoverPos = null;
+        SoundEngine.playStonePlace(player);
+
+        // 온라인 내 착수인 경우 상대방에게 즉시 전송
+        if (state.mode === 'online' && !fromRemote) {
+          sendPacket({ type: 'move', r, c });
+        }
+
+        // 승리 판정
+        const winLine = getWinningLine(state.board, r, c, player);
+        if (winLine) {
+          finishGame(player, 'five', winLine);
+          return true;
+        }
+
+        // 무승부 판정
+        if (state.history.length >= BOARD_SIZE * BOARD_SIZE) {
+          finishGame(EMPTY, 'draw', []);
+          return true;
+        }
+
+        // 차례 교대
+        state.currentPlayer = player === BLACK ? WHITE : BLACK;
+        updateForbiddenMap();
+        updateUI();
+        drawBoard();
+        return true;
+      }
+
+      function finishGame(winner, reason, winLine = []) {
+        state.gameOver = true;
+        state.winner = winner;
+        state.winReason = reason;
+        state.winningLine = winLine;
+        state.forbiddenMap.clear();
+        state.online.undoPending = false;
+        state.online.rematchPending = false;
+
+        const st = getActiveStats();
+        if (winner === BLACK) st.black++;
+        else if (winner === WHITE) st.white++;
+        else st.draw++;
+
+        if (state.mode === 'offline') saveOfflineStats();
+        updateUI();
+
+        if (winLine.length >= 5) {
+          startWinAnimation();
+          SoundEngine.playWin();
+        } else {
+          drawBoard();
+          if (winner !== EMPTY) SoundEngine.playWin();
+        }
+
+        setTimeout(() => openResultModal(winner, reason), 420);
+      }
+
+      // 1수 무르기 실제 실행
+      function executeUndoOneMove() {
+        if (state.history.length === 0) return;
+        stopWinAnimation();
+        closeResultModal();
+        state.gameOver = false;
+        state.winner = EMPTY;
+        state.winningLine = [];
+
+        const last = state.history.pop();
+        state.board[last.r][last.c] = EMPTY;
+        state.currentPlayer = last.player;
+
+        updateForbiddenMap();
+        updateUI();
+        drawBoard();
+      }
+
+      // 새 대국 시작 (보드 초기화)
+      function startNewMatchBoard() {
+        stopWinAnimation();
+        closeResultModal();
+        state.board = createEmptyBoard();
+        state.history = [];
+        state.currentPlayer = BLACK;
+        state.gameOver = false;
+        state.winner = EMPTY;
+        state.winReason = 'five';
+        state.winningLine = [];
+        state.hoverPos = null;
+        state.forbiddenMap.clear();
+        state.online.undoPending = false;
+        state.online.rematchPending = false;
+
+        updateUI();
+        drawBoard();
+      }
+
+      // 결과 모달
+      function openResultModal(winner, reason) {
+        if (winner === BLACK) {
+          resultStoneIcon.className = 'stone-icon stone-black w-10 h-10';
+          resultTitle.textContent = `${getPlayerName(BLACK)} 승리!`;
+        } else if (winner === WHITE) {
+          resultStoneIcon.className = 'stone-icon stone-white w-10 h-10';
+          resultTitle.textContent = `${getPlayerName(WHITE)} 승리!`;
+        } else {
+          resultStoneIcon.className = 'stone-icon w-10 h-10 bg-[#cbb89d]';
+          resultTitle.textContent = '무승부';
+        }
+
+        if (reason === 'resign') {
+          const loser = winner === BLACK ? WHITE : BLACK;
+          resultSubtitle.textContent = `${getPlayerName(loser)}의 기권으로 대국이 종료되었습니다.`;
+        } else if (reason === 'draw') {
+          resultSubtitle.textContent = '팽팽한 접전 끝에 모든 자리가 채워졌습니다.';
+        } else {
+          resultSubtitle.textContent = `총 ${state.history.length}수 만에 5목을 완성했습니다.`;
+        }
+
+        btnModalRematch.textContent = state.mode === 'online' ? '다시 하기 (흑·백 교대)' : '다시 한 판';
+        btnModalRematch.disabled = false;
+        resultModal.classList.remove('hidden');
+        resultModal.classList.add('flex');
+      }
+
+      function closeResultModal() {
+        resultModal.classList.add('hidden');
+        resultModal.classList.remove('flex');
+      }
+
+      // =========================================================================
+      // 7. PeerJS 온라인 P2P 네트워크 엔진
+      // =========================================================================
+      function generateRoomCode() {
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+          code += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+        }
+        return code;
+      }
+
+      function createPeerInstance(peerId = undefined) {
+        const options = {
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+          }
+        };
+        return peerId ? new Peer(peerId, options) : new Peer(options);
+      }
+
+      function sendPacket(payload) {
+        if (conn && conn.open) {
+          try { conn.send(payload); } catch (e) { /* 무시 */ }
+        }
+      }
+
+      function startHeartbeat() {
+        stopHeartbeat();
+        lastPongTime = Date.now();
+        pingInterval = setInterval(() => {
+          if (!conn || !conn.open) return;
+          if (Date.now() - lastPongTime > 13000) {
+            handleUnexpectedDisconnect('네트워크 응답 시간 초과로 연결이 끊어졌습니다.');
+            return;
+          }
+          sendPacket({ type: 'ping' });
+        }, 4000);
+      }
+
+      function stopHeartbeat() {
+        if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+      }
+
+      function cleanupNetwork(isIntentional = true) {
+        intentionalClose = isIntentional;
+        stopHeartbeat();
+        if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+        state.online.connected = false;
+        if (conn) {
+          try { conn.close(); } catch (e) {}
+          conn = null;
+        }
+        if (peer) {
+          try { peer.destroy(); } catch (e) {}
+          peer = null;
+        }
+      }
+
+      function resetOnlineLobbyUI() {
+        createSetupBox.classList.remove('hidden');
+        createWaitingBox.classList.add('hidden');
+        onlineTabs.classList.remove('hidden');
+        btnCreateRoom.disabled = false;
+        btnJoinRoom.disabled = false;
+        btnJoinRoomText.textContent = '방 입장하기';
+        joinErrorBox.classList.add('hidden');
+        joinErrorBox.textContent = '';
+      }
+
+      function showJoinError(msg) {
+        joinErrorBox.textContent = msg;
+        joinErrorBox.classList.remove('hidden');
+        btnJoinRoom.disabled = false;
+        btnJoinRoomText.textContent = '방 입장하기';
+      }
+
+      function switchOnlineTab(tab) {
+        const isCreate = tab === 'create';
+        panelCreateRoom.classList.toggle('hidden', !isCreate);
+        panelJoinRoom.classList.toggle('hidden', isCreate);
+
+        tabCreateRoom.className = isCreate
+          ? 'py-2 rounded-lg text-sm font-bold bg-[#fffdf9] text-[#2a211b] shadow-sm transition'
+          : 'py-2 rounded-lg text-sm font-semibold text-[#756252] hover:text-[#2a211b] transition';
+        tabJoinRoom.className = !isCreate
+          ? 'py-2 rounded-lg text-sm font-bold bg-[#fffdf9] text-[#2a211b] shadow-sm transition'
+          : 'py-2 rounded-lg text-sm font-semibold text-[#756252] hover:text-[#2a211b] transition';
+      }
+
+      // [호스트] 방 생성
+      function hostCreateRoom(retryCount = 0) {
+        if (typeof Peer === 'undefined') {
+          showToast('온라인 모듈(PeerJS)을 불러오지 못했습니다. 새로고침해 주세요.', 'warn');
+          return;
+        }
+
+        const nick = onlineNickname.value.trim() || '호스트';
+        state.online.nickname = nick;
+        saveOnlineNickname();
+
+        cleanupNetwork(true);
+        intentionalClose = false;
+        btnCreateRoom.disabled = true;
+
+        const code = generateRoomCode();
+        state.online.roomCode = code;
+        state.online.isHost = true;
+
+        try {
+          peer = createPeerInstance(PEER_PREFIX + code);
+        } catch (e) {
+          btnCreateRoom.disabled = false;
+          showToast('방 생성 중 오류가 발생했습니다.', 'warn');
+          return;
+        }
+
+        peer.on('open', () => {
+          displayRoomCode.textContent = code;
+          const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${code}`;
+          displayInviteLink.textContent = inviteUrl;
+          createSetupBox.classList.add('hidden');
+          createWaitingBox.classList.remove('hidden');
+          onlineTabs.classList.add('hidden');
+          waitingStatusText.textContent = '상대방의 입장을 기다리는 중...';
+          showToast(`방 코드 [${code}]가 생성되었습니다!`, 'success');
+        });
+
+        peer.on('connection', (incomingConn) => {
+          // 이미 다른 참가자가 연결되어 있으면 입장 거부
+          if (conn && conn.open) {
+            incomingConn.on('open', () => {
+              incomingConn.send({ type: 'room_full' });
+              setTimeout(() => incomingConn.close(), 300);
+            });
+            return;
+          }
+
+          conn = incomingConn;
+          waitingStatusText.textContent = '상대방과 연결하는 중...';
+          setupConnectionHandlers(conn, true);
+        });
+
+        peer.on('error', (err) => {
+          if (err.type === 'unavailable-id' && retryCount < 3) {
+            hostCreateRoom(retryCount + 1);
+            return;
+          }
+          cleanupNetwork(true);
+          resetOnlineLobbyUI();
+          showToast('연결 서버 오류가 발생했습니다. 다시 시도해 주세요.', 'warn');
+        });
+      }
+
+      // [게스트] 방 입장
+      function guestJoinRoom() {
+        if (typeof Peer === 'undefined') {
+          showJoinError('온라인 모듈(PeerJS)을 불러오지 못했습니다. 네트워크를 확인해 주세요.');
+          return;
+        }
+
+        const code = inputJoinCode.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (code.length !== 6) {
+          showJoinError('6자리 영문/숫자 방 코드를 정확히 입력해 주세요.');
+          return;
+        }
+
+        const nick = onlineNickname.value.trim() || '참가자';
+        state.online.nickname = nick;
+        saveOnlineNickname();
+
+        cleanupNetwork(true);
+        intentionalClose = false;
+        joinErrorBox.classList.add('hidden');
+        btnJoinRoom.disabled = true;
+        btnJoinRoomText.textContent = '방에 연결하는 중...';
+
+        state.online.roomCode = code;
+        state.online.isHost = false;
+
+        try {
+          peer = createPeerInstance();
+        } catch (e) {
+          showJoinError('P2P 초기화에 실패했습니다.');
+          return;
+        }
+
+        joinTimeout = setTimeout(() => {
+          if (!state.online.connected) {
+            cleanupNetwork(true);
+            showJoinError('연결 시간이 초과되었습니다. 방 코드가 맞는지 확인해 주세요.');
+          }
+        }, 12000);
+
+        peer.on('open', () => {
+          conn = peer.connect(PEER_PREFIX + code, { reliable: true });
+          setupConnectionHandlers(conn, false);
+        });
+
+        peer.on('error', (err) => {
+          if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+          cleanupNetwork(true);
+          if (err.type === 'peer-unavailable') {
+            showJoinError('존재하지 않거나 이미 종료된 방 코드입니다.');
+          } else {
+            showJoinError('방에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.');
+          }
+        });
+      }
+
+      // P2P 데이터 채널 공통 핸들러
+      function setupConnectionHandlers(connection, isHost) {
+        connection.on('open', () => {
+          if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+          state.online.connected = true;
+          startHeartbeat();
+
+          // 게스트가 먼저 hello(닉네임) 전송 -> 호스트가 welcome(규칙, 닉네임) 응답하며 게임 시작
+          if (!isHost) {
+            sendPacket({ type: 'hello', nickname: state.online.nickname });
+          }
+        });
+
+        connection.on('data', (data) => {
+          if (!data || typeof data !== 'object') return;
+          handleNetworkMessage(data);
+        });
+
+        connection.on('close', () => {
+          if (!intentionalClose) {
+            handleUnexpectedDisconnect('상대방과의 연결이 종료되었습니다.');
+          }
+        });
+
+        connection.on('error', () => {
+          if (!intentionalClose) {
+            handleUnexpectedDisconnect('네트워크 통신 오류가 발생했습니다.');
+          }
+        });
+      }
+
+      // 수신 패킷 처리
+      function handleNetworkMessage(msg) {
+        switch (msg.type) {
+          case 'ping':
+            sendPacket({ type: 'pong' });
+            break;
+
+          case 'pong':
+            lastPongTime = Date.now();
+            break;
+
+          case 'room_full':
+            intentionalClose = true;
+            cleanupNetwork(true);
+            showJoinError('이미 2명이 가득 찬 방입니다.');
+            break;
+
+          // [호스트 수신] 게스트 입장 완료
+          case 'hello':
+            state.online.opponentName = String(msg.nickname || '참가자').slice(0, 10);
+            state.online.myColor = BLACK;
+            state.renjuRule = state.online.hostRenju;
+            state.online.sessionStats = { black: 0, white: 0, draw: 0 };
+
+            sendPacket({
+              type: 'welcome',
+              nickname: state.online.nickname,
+              renjuRule: state.renjuRule
+            });
+
+            enterOnlineGame();
+            break;
+
+          // [게스트 수신] 호스트 환영 및 규칙 동기화
+          case 'welcome':
+            state.online.opponentName = String(msg.nickname || '호스트').slice(0, 10);
+            state.online.myColor = WHITE;
+            state.renjuRule = Boolean(msg.renjuRule);
+            state.online.sessionStats = { black: 0, white: 0, draw: 0 };
+
+            enterOnlineGame();
+            break;
+
+          // 상대방 착수
+          case 'move':
+            if (state.currentPlayer !== state.online.myColor) {
+              applyMove(msg.r, msg.c, true);
+            }
+            break;
+
+          // 상대방 무르기 요청
+          case 'undo_request':
+            SoundEngine.playNotify();
+            openConfirmModal({
+              title: '무르기 요청',
+              message: `${state.online.opponentName}님이 직전 1수를 무르자고 요청했습니다. 수락할까요?`,
+              okText: '수락',
+              cancelText: '거절',
+              onOk: () => {
+                sendPacket({ type: 'undo_response', accepted: true });
+                executeUndoOneMove();
+                showToast('무르기 요청을 수락했습니다.');
+              },
+              onCancel: () => {
+                sendPacket({ type: 'undo_response', accepted: false });
+              }
+            });
+            break;
+
+          // 무르기 응답
+          case 'undo_response':
+            state.online.undoPending = false;
+            if (msg.accepted) {
+              executeUndoOneMove();
+              showToast('상대방이 무르기를 수락했습니다.', 'success');
+            } else {
+              updateUI();
+              showToast('상대방이 무르기 요청을 거절했습니다.', 'warn');
+            }
+            break;
+
+          // 상대방 기권
+          case 'resign':
+            if (!state.gameOver) {
+              finishGame(state.online.myColor, 'resign', []);
+              showToast(`${state.online.opponentName}님이 기권했습니다.`, 'success');
+            }
+            break;
+
+          // 상대방 재대국 요청
+          case 'rematch_request':
+            if (state.online.rematchPending) {
+              // 양쪽 모두 요청한 경우 즉시 시작
+              sendPacket({ type: 'rematch_response', accepted: true });
+              startOnlineRematch();
+              return;
+            }
+            SoundEngine.playNotify();
+            closeResultModal();
+            openConfirmModal({
+              title: '다시 하기 요청',
+              message: `${state.online.opponentName}님이 다시 한 판을 요청했습니다. 흑·백을 교대해 시작할까요?`,
+              okText: '수락',
+              cancelText: '거절',
+              onOk: () => {
+                sendPacket({ type: 'rematch_response', accepted: true });
+                startOnlineRematch();
+              },
+              onCancel: () => {
+                sendPacket({ type: 'rematch_response', accepted: false });
+              }
+            });
+            break;
+
+          // 재대국 응답
+          case 'rematch_response':
+            state.online.rematchPending = false;
+            if (msg.accepted) {
+              startOnlineRematch();
+            } else {
+              btnModalRematch.disabled = false;
+              btnModalRematch.textContent = '다시 하기 (흑·백 교대)';
+              showToast('상대방이 다시 하기 요청을 거절했습니다.', 'warn');
+            }
+            break;
+
+          // 빠른 인사 / 리액션
+          case 'reaction':
+            SoundEngine.playNotify();
+            showReactionBubble(state.online.opponentName, String(msg.text || '').slice(0, 24));
+            break;
+
+          // 상대방 자발적 퇴장
+          case 'leave':
+            handleUnexpectedDisconnect(`${state.online.opponentName}님이 대국 방을 나갔습니다.`);
+            break;
+        }
+      }
+
+      function enterOnlineGame() {
+        state.mode = 'online';
+        clearUrlRoomParam();
+        showView('game');
+        startNewMatchBoard();
+        SoundEngine.playNotify();
+        const roleLabel = state.online.myColor === BLACK ? '흑돌(선공)' : '백돌(후공)';
+        showToast(`대국 시작! 당신은 ${roleLabel}입니다.`, 'success');
+      }
+
+      function startOnlineRematch() {
+        // 흑·백 자동 교대
+        state.online.myColor = state.online.myColor === BLACK ? WHITE : BLACK;
+        // 전적 스왑(흑/백 스코어보드 이름이 바뀌므로 기존 흑/백 승수도 각 플레이어에 맞게 교대)
+        const prevBlack = state.online.sessionStats.black;
+        state.online.sessionStats.black = state.online.sessionStats.white;
+        state.online.sessionStats.white = prevBlack;
+
+        startNewMatchBoard();
+        SoundEngine.playNotify();
+        const roleLabel = state.online.myColor === BLACK ? '흑돌(선공)' : '백돌(후공)';
+        showToast(`흑·백 교대! 이번 판은 ${roleLabel}입니다.`, 'success');
+      }
+
+      function handleUnexpectedDisconnect(reasonText) {
+        if (state.view === 'lobby') return;
+        const wasInGame = state.view === 'game';
+        cleanupNetwork(true);
+
+        if (wasInGame) {
+          closeResultModal();
+          closeConfirmModal();
+          updateUI();
+          disconnectMessage.textContent = reasonText;
+          disconnectModal.classList.remove('hidden');
+          disconnectModal.classList.add('flex');
+        } else {
+          resetOnlineLobbyUI();
+          showToast(reasonText, 'warn');
+        }
+      }
+
+      // =========================================================================
+      // 8. 이벤트 리스너 바인딩
+      // =========================================================================
+
+      // 로비 모드 선택
+      btnSelectOffline.addEventListener('click', () => {
+        state.mode = 'offline';
+        showView('game');
+        startNewMatchBoard();
+      });
+
+      btnSelectOnline.addEventListener('click', () => {
+        resetOnlineLobbyUI();
+        switchOnlineTab('create');
+        showView('online');
+      });
+
+      // 상단 로비로 버튼
+      btnGoLobby.addEventListener('click', () => {
+        if (state.mode === 'online' && state.view === 'game' && state.online.connected) {
+          openConfirmModal({
+            title: '로비로 나가기',
+            message: '진행 중인 온라인 대국 연결을 종료하고 로비로 돌아갈까요?',
+            okText: '나가기',
+            cancelText: '계속 두기',
+            onOk: () => {
+              sendPacket({ type: 'leave' });
+              setTimeout(() => returnToLobby(), 80);
+            }
+          });
+        } else {
+          returnToLobby();
+        }
+      });
+
+      // 온라인 로비 탭 & 설정
+      tabCreateRoom.addEventListener('click', () => switchOnlineTab('create'));
+      tabJoinRoom.addEventListener('click', () => switchOnlineTab('join'));
+
+      toggleHostRenju.addEventListener('click', () => {
+        state.online.hostRenju = !state.online.hostRenju;
+        toggleHostRenju.classList.toggle('on', state.online.hostRenju);
+        toggleHostRenju.setAttribute('aria-checked', String(state.online.hostRenju));
+      });
+
+      onlineNickname.addEventListener('input', () => {
+        state.online.nickname = onlineNickname.value.trim() || '플레이어';
+        saveOnlineNickname();
+      });
+
+      btnCreateRoom.addEventListener('click', () => hostCreateRoom(0));
+      btnCancelRoom.addEventListener('click', () => {
+        cleanupNetwork(true);
+        resetOnlineLobbyUI();
+        showToast('방 만들기를 취소했습니다.');
+      });
+
+      btnCopyCode.addEventListener('click', () => {
+        copyToClipboard(state.online.roomCode, `방 코드 [${state.online.roomCode}]를 복사했습니다!`);
+      });
+
+      btnCopyLink.addEventListener('click', () => {
+        const url = `${window.location.origin}${window.location.pathname}?room=${state.online.roomCode}`;
+        copyToClipboard(url, '초대 링크를 복사했습니다! 친구에게 공유해 보세요.');
+      });
+
+      inputJoinCode.addEventListener('input', () => {
+        inputJoinCode.value = inputJoinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        joinErrorBox.classList.add('hidden');
+      });
+      inputJoinCode.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') guestJoinRoom();
+      });
+      btnJoinRoom.addEventListener('click', guestJoinRoom);
+
+      // 캔버스 마우스 / 클릭 이벤트
+      function getCanvasPoint(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      }
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!canInteractNow()) {
+          if (state.hoverPos) { state.hoverPos = null; drawBoard(); }
+          return;
+        }
+        const pt = getCanvasPoint(e);
+        const grid = pixelToGrid(pt.x, pt.y);
+        const changed =
+          (grid && !state.hoverPos) ||
+          (!grid && state.hoverPos) ||
+          (grid && state.hoverPos && (grid.r !== state.hoverPos.r || grid.c !== state.hoverPos.c));
+        if (changed) { state.hoverPos = grid; drawBoard(); }
+      });
+
+      canvas.addEventListener('mouseleave', () => {
+        if (state.hoverPos) { state.hoverPos = null; drawBoard(); }
+      });
+
+      canvas.addEventListener('click', (e) => {
+        if (!canInteractNow()) return;
+        const pt = getCanvasPoint(e);
+        const grid = pixelToGrid(pt.x, pt.y);
+        if (!grid) return;
+        applyMove(grid.r, grid.c, false);
+      });
+
+      // 오프라인 플레이어 이름 수정
+      function bindOfflineNameInput(inputEl, key, fallback) {
+        inputEl.addEventListener('input', () => {
+          if (state.mode !== 'offline') return;
+          state.offlineNames[key] = inputEl.value.trim() || fallback;
+          saveOfflineNames();
+          updateUI();
+        });
+        inputEl.addEventListener('blur', () => {
+          if (state.mode !== 'offline') return;
+          if (!inputEl.value.trim()) {
+            inputEl.value = fallback;
+            state.offlineNames[key] = fallback;
+            saveOfflineNames();
+            updateUI();
+          }
+        });
+        inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') inputEl.blur(); });
+      }
+      bindOfflineNameInput(nameBlackInput, 'black', '흑돌');
+      bindOfflineNameInput(nameWhiteInput, 'white', '백돌');
+
+      // 무르기 버튼 (오프라인 즉시 실행 / 온라인 요청 전송)
+      btnUndo.addEventListener('click', () => {
+        if (state.history.length === 0) return;
+        if (state.mode === 'offline') {
+          const last = state.history[state.history.length - 1];
+          executeUndoOneMove();
+          showToast(`${getPlayerName(last.player)}의 직전 수를 물렀습니다.`);
+        } else {
+          if (!state.online.connected || state.gameOver || state.online.undoPending) return;
+          state.online.undoPending = true;
+          updateUI();
+          sendPacket({ type: 'undo_request' });
+          showToast('상대방에게 무르기를 요청했습니다...');
+        }
+      });
+
+      // 오프라인 새 게임
+      btnNewGame.addEventListener('click', () => {
+        startNewMatchBoard();
+        showToast('새 대국을 시작합니다.', 'success');
+      });
+
+      // 온라인 기권
+      btnResign.addEventListener('click', () => {
+        if (state.mode !== 'online' || state.gameOver || !state.online.connected) return;
+        openConfirmModal({
+          title: '기권하기',
+          message: '정말 기권하시겠습니까? 상대방의 승리로 대국이 종료됩니다.',
+          okText: '기권',
+          cancelText: '취소',
+          onOk: () => {
+            sendPacket({ type: 'resign' });
+            const oppColor = state.online.myColor === BLACK ? WHITE : BLACK;
+            finishGame(oppColor, 'resign', []);
+          }
+        });
+      });
+
+      // 수순 번호 표시
+      btnToggleNumbers.addEventListener('click', () => {
+        state.showNumbers = !state.showNumbers;
+        numbersBtnLabel.textContent = state.showNumbers ? '수순 표시: 켜기' : '수순 표시: 끄기';
+        drawBoard();
+      });
+
+      // 효과음 토글
+      btnSound.addEventListener('click', () => {
+        state.soundEnabled = !state.soundEnabled;
+        iconSoundOn.classList.toggle('hidden', !state.soundEnabled);
+        iconSoundOff.classList.toggle('hidden', state.soundEnabled);
+        soundLabel.textContent = state.soundEnabled ? '소리 켜짐' : '음소거';
+        if (state.soundEnabled) SoundEngine.playStonePlace(BLACK);
+      });
+
+      // 오프라인 전적 초기화
+      btnResetStats.addEventListener('click', () => {
+        if (state.mode !== 'offline') return;
+        state.offlineStats = { black: 0, white: 0, draw: 0 };
+        saveOfflineStats();
+        renderStats();
+        showToast('대국 전적이 초기화되었습니다.');
+      });
+
+      // 렌주룰 토글 (오프라인 전용)
+      toggleRenju.addEventListener('click', () => {
+        if (state.mode === 'online') return;
+        state.renjuRule = !state.renjuRule;
+        updateForbiddenMap();
+        updateUI();
+        drawBoard();
+        showToast(state.renjuRule ? '렌주룰(흑돌 금수)을 적용합니다.' : '렌주룰을 해제했습니다.');
+      });
+
+      // 빠른 인사 / 리액션 버튼
+      let lastReactionSent = 0;
+      reactionBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (state.mode !== 'online' || !state.online.connected) return;
+          const now = Date.now();
+          if (now - lastReactionSent < 1200) return;
+          lastReactionSent = now;
+          const text = btn.getAttribute('data-reaction');
+          sendPacket({ type: 'reaction', text });
+          showToast(`인사 전송: ${text}`);
+        });
+      });
+
+      // 결과 모달 버튼
+      btnModalClose.addEventListener('click', closeResultModal);
+      btnModalRematch.addEventListener('click', () => {
+        if (state.mode === 'offline') {
+          startNewMatchBoard();
+          showToast('새 대국을 시작합니다.', 'success');
+        } else {
+          if (!state.online.connected) return;
+          state.online.rematchPending = true;
+          btnModalRematch.disabled = true;
+          btnModalRematch.textContent = '상대 수락 대기 중...';
+          sendPacket({ type: 'rematch_request' });
+          showToast('상대방에게 다시 하기를 요청했습니다.');
+        }
+      });
+      resultModal.addEventListener('click', (e) => {
+        if (e.target === resultModal) closeResultModal();
+      });
+
+      // 연결 끊김 모달 -> 로비
+      btnDisconnectLobby.addEventListener('click', returnToLobby);
+
+      // 창 닫기 전 상대방에게 퇴장 알림
+      window.addEventListener('beforeunload', () => {
+        if (state.mode === 'online' && conn && conn.open) {
+          sendPacket({ type: 'leave' });
+        }
+      });
+
+      window.addEventListener('resize', resizeCanvas);
+
+      // ----- 앱 초기화 및 ?room= 초대 링크 자동 감지 -----
+      window.addEventListener('load', () => {
+        loadSavedData();
+        state.board = createEmptyBoard();
+
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = (params.get('room') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        if (roomParam.length === 6) {
+          resetOnlineLobbyUI();
+          switchOnlineTab('join');
+          inputJoinCode.value = roomParam;
+          showView('online');
+          showToast(`초대 방 코드 [${roomParam}]가 자동 입력되었습니다. 닉네임 확인 후 입장하세요!`, 'info');
+        } else {
+          showView('lobby');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
